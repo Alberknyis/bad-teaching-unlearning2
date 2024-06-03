@@ -12,7 +12,7 @@ def UnLearningScore(tmodel, gold_model, forget_dl, batch_size, device):
     gold_model_preds = []
     with torch.no_grad():
         for batch in forget_dl:
-            x, y, cy = batch
+            x, y = batch
             x = x.to(device)
             model_output = tmodel(x)
             gold_model_output = gold_model(x)
