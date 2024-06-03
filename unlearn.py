@@ -126,8 +126,8 @@ def UNSIR_create_noisy_loader(noise, forget_class_label, retain_samples, batch_s
 
     other_samples = []
     for i in range(len(retain_samples)):
-        other_samples.append((retain_samples[i][0].cpu(), torch.tensor(retain_samples[i][2]),\
-                            torch.tensor(retain_samples[i][2])))
+        other_samples.append((retain_samples[i][0].cpu(), torch.tensor(retain_samples[i][1]),\
+                            torch.tensor(retain_samples[i][1])))
     noisy_data += other_samples
     noisy_loader = torch.utils.data.DataLoader(noisy_data, batch_size=batch_size, shuffle = True)
     
