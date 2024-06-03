@@ -4,7 +4,8 @@ from torch.utils.data import DataLoader
 from dataset import UnLearningData
 import numpy as np
 from utils import *
-
+import torch_xla.core.xla_model as xm
+import torch_xla.distributed.parallel_loader as pl
 
 def UnlearnerLoss(output, labels, full_teacher_logits, unlearn_teacher_logits, KL_temperature):
     labels = torch.unsqueeze(labels, dim = 1)
@@ -21,7 +22,8 @@ def UnlearnerLoss(output, labels, full_teacher_logits, unlearn_teacher_logits, K
 def unlearning_step(model, unlearning_teacher, full_trained_teacher, unlearn_data_loader, optimizer, 
             device, KL_temperature):
     losses = []
-    for batch in unlearn_data_loader:
+    xla_unlearn_data_loader = pl.MpDeviceLoader(unlearn_data_loader, xm.xla_device())
+    for batch in xla_unlearn_data_loader:
         x, y = batch
         x, y = x.to(device), y.to(device)
         with torch.no_grad():
@@ -32,7 +34,7 @@ def unlearning_step(model, unlearning_teacher, full_trained_teacher, unlearn_dat
         loss = UnlearnerLoss(output = output, labels=y, full_teacher_logits=full_teacher_logits, 
                 unlearn_teacher_logits=unlearn_teacher_logits, KL_temperature=KL_temperature)
         loss.backward()
-        optimizer.step()
+        xm.optimizer_step(optimizer)
         losses.append(loss.detach().cpu().numpy())
     return np.mean(losses)
 
@@ -47,12 +49,13 @@ def fit_one_unlearning_cycle(epochs,  model, train_loader, val_loader, lr, devic
         model.train()
         train_losses = []
         lrs = []
-        for batch in train_loader:
+        xla_train_loader = pl.MpDeviceLoader(train_loader, xm.xla_device())
+        for batch in xla_train_loader:
             loss = training_step(model, batch, device)
             loss.backward()
             train_losses.append(loss.detach().cpu())
             
-            optimizer.step()
+            xm.optimizer_step(optimizer)
             optimizer.zero_grad()
             
             lrs.append(get_lr(optimizer))
@@ -102,13 +105,13 @@ def UNSIR_noise_train(noise, model, forget_class_label, num_epochs, noise_batch_
   
     for epoch in range(num_epochs):
         total_loss = []
-        inputs = noise()
-        labels = torch.zeros(noise_batch_size).to(device)+forget_class_label
+        inputs = noise().to(device)
+        labels = torch.zeros(noise_batch_size, device=device) + forget_class_label
         outputs = model(inputs)
         loss = -F.cross_entropy(outputs, labels.long()) + 0.1*torch.mean(torch.sum(inputs**2, [1, 2, 3]))
         opt.zero_grad()
         loss.backward()
-        opt.step()
+        xm.optimizer_step(opt)
         total_loss.append(loss.cpu().detach().numpy())
         if epoch%5 == 0:
             print("Loss: {}".format(np.mean(total_loss)))
