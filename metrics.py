@@ -33,7 +33,7 @@ def collect_prob(data_loader, model):
     with torch.no_grad():
         for batch in data_loader:
             batch = [tensor.to(next(model.parameters()).device) for tensor in batch]
-            data, _, target = batch
+            data, _ = batch
             output = model(data)
             prob.append(F.softmax(output, dim=-1).data)
     return torch.cat(prob)
@@ -64,7 +64,7 @@ def actv_dist(model1, model2, dataloader, device = 'cuda'):
     sftmx = nn.Softmax(dim = 1)
     distances = []
     for batch in dataloader:
-        x, _, _ = batch
+        x, _ = batch
         x = x.to(device)
         model1_out = model1(x)
         model2_out = model2(x)
