@@ -1,6 +1,8 @@
 from torch.nn import functional as F
 import torch
 from sklearn.svm import SVC
+import torch_xla.core.xla_model as xm
+import torch_xla.distributed.parallel_loader as pl
 
 def JSDiv(p, q):
     m = (p+q)/2
@@ -31,7 +33,8 @@ def collect_prob(data_loader, model):
     data_loader = torch.utils.data.DataLoader(data_loader.dataset, batch_size=1, shuffle=False, num_workers = 32, prefetch_factor = 10)
     prob = []
     with torch.no_grad():
-        for batch in data_loader:
+        xla_data_loader = pl.MpDeviceLoader(data_loader, xm.xla_device())
+        for batch in xla_data_loader:
             batch = [tensor.to(next(model.parameters()).device) for tensor in batch]
             data, _ = batch
             output = model(data)
@@ -63,7 +66,8 @@ def get_membership_attack_prob(retain_loader, forget_loader, test_loader, model)
 def actv_dist(model1, model2, dataloader, device = 'cuda'):
     sftmx = nn.Softmax(dim = 1)
     distances = []
-    for batch in dataloader:
+    xla_dataloader = pl.MpDeviceLoader(dataloader, xm.xla_device())
+    for batch in xla_dataloader:
         x, _ = batch
         x = x.to(device)
         model1_out = model1(x)
