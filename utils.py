@@ -2,6 +2,9 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+import torch_xla.core.xla_model as xm
+import torch_xla.distributed.parallel_loader as pl
+
 
 def accuracy(outputs, labels):
     _, preds = torch.max(outputs, dim=1)
@@ -64,12 +67,13 @@ def fit_one_cycle(epochs,  model, train_loader, val_loader, device, pretrained_l
         model.train()
         train_losses = []
         lrs = []
-        for batch in train_loader:
+        xla_train_loader = pl.MpDeviceLoader(train_loader, xm.xla_device())
+        for batch in xla_train_loader:
             loss = training_step(model, batch, device)
             train_losses.append(loss)
             loss.backward()
             
-            optimizer.step()
+            xm.optimizer_step(optimizer)
             optimizer.zero_grad()
             
             lrs.append(get_lr(optimizer))
